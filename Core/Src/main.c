@@ -40,6 +40,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define SENSOR_ADDRESS 0x77
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -166,15 +167,22 @@ int main(void) {
     HAL_NVIC_EnableIRQ(TIM17_IRQn);
     HAL_TIM_Base_Start(&htim16);
     HAL_I2C_MspInit(&hi2c1);
-    if (HAL_I2C_IsDeviceReady(&hi2c1, 0x77 << 1, 2, 100) == HAL_OK) {
+    HAL_I2C_MspInit(&hi2c2);
+    if (HAL_I2C_IsDeviceReady(&hi2c1, SENSOR_ADDRESS << 1, 2, 100) == HAL_OK) {
         dev_okay = 1;
+        sensor.intf_ptr = &hi2c1;
+
+    }
+    if (HAL_I2C_IsDeviceReady(&hi2c2, SENSOR_ADDRESS << 1, 2, 100) == HAL_OK) {
+        dev_okay = 1;
+        sensor.intf_ptr = &hi2c2;
+
     }
 
     sensor.delay_us = bmm150_user_delay_us;
     sensor.read = bmm150_user_i2c_reg_read;
     sensor.write = bmm150_user_i2c_reg_write;
     sensor.intf = BMP3_I2C_INTF;
-    sensor.intf_ptr = &hi2c1;
     sensor.fifo = &fifo_struct;
     sensor.fifo->data.buffer = sensor_fifo;
 
@@ -198,14 +206,17 @@ int main(void) {
 
         /* Assign the settings which needs to be set in the sensor */
 
-        if (bmp3_set_sensor_settings(BMP3_SEL_PRESS_EN | BMP3_SEL_TEMP_EN | BMP3_SEL_PRESS_OS | BMP3_SEL_TEMP_OS | BMP3_SEL_ODR, &sensor) == BMP3_SENSOR_OK) {
+        if (bmp3_set_sensor_settings(
+                BMP3_SEL_PRESS_EN | BMP3_SEL_TEMP_EN | BMP3_SEL_PRESS_OS | BMP3_SEL_TEMP_OS | BMP3_SEL_ODR, &sensor) ==
+            BMP3_SENSOR_OK) {
 //            HAL_GPIO_TogglePin(LED0_GPIO_Port, LED1_Pin);
             printf("Sensor settings set\n");
             sensor.settings.op_mode = BMP3_MODE_NORMAL;
             if (bmp3_set_op_mode(&sensor) == BMP3_SENSOR_OK) {
                 printf("Sensor operational mode set\n");
                 if (bmp3_set_fifo_settings(BMP3_SEL_FIFO_MODE | BMP3_SEL_FIFO_TIME_EN | BMP3_SEL_FIFO_TEMP_EN
-                                           | BMP3_SEL_FIFO_PRESS_EN | BMP3_SEL_FIFO_STOP_ON_FULL_EN, &sensor) == BMP3_SENSOR_OK) {
+                                           | BMP3_SEL_FIFO_PRESS_EN | BMP3_SEL_FIFO_STOP_ON_FULL_EN, &sensor) ==
+                    BMP3_SENSOR_OK) {
                     printf("Sensor fifo is set\n");
                 };
                 HAL_Delay(100);
@@ -303,9 +314,10 @@ void bmm150_user_delay_us(uint32_t period_us, void *intf_ptr) {
 // typedef BMP3_INTF_RET_TYPE (*bmp3_write_fptr_t)(uint8_t reg_addr, const uint8_t *read_data, uint32_t len, void *intf_ptr);
 
 int8_t bmm150_user_i2c_reg_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t length, void *intf_ptr) {
-
+    uint8_t *reg_data_v;
+    reg_data_v = (uint8_t *) reg_data;
     /* Write to registers using I2C. Return 0 for a successful execution. */
-    if (HAL_I2C_Mem_Write(intf_ptr, 0x77 << 1, reg_addr, 1, reg_data, length, 1000) == HAL_OK) {
+    if (HAL_I2C_Mem_Write(intf_ptr, SENSOR_ADDRESS << 1, reg_addr, 1, reg_data_v, length, 1000) == HAL_OK) {
         return BMP3_OK;
     };
     return BMP3_E_COMM_FAIL;
@@ -314,16 +326,15 @@ int8_t bmm150_user_i2c_reg_write(uint8_t reg_addr, const uint8_t *reg_data, uint
 int8_t bmm150_user_i2c_reg_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *intf_ptr) {
 
     /* Read from registers using I2C. Return 0 for a successful execution. */
-    if (HAL_I2C_Mem_Read(intf_ptr, 0x77 << 1, reg_addr, 1, reg_data, length, 1000) == HAL_OK) {
+    if (HAL_I2C_Mem_Read(intf_ptr, SENSOR_ADDRESS << 1, reg_addr, 1, reg_data, length, 1000) == HAL_OK) {
         return BMP3_OK;
     };
     return BMP3_E_COMM_FAIL;
 }
 
-
 /*!
- * @brief  Function to analyze the sensor data
- */
+* @brief  Function to analyze the sensor data
+*/
 static int8_t analyze_sensor_data(const struct bmp3_data *sens_data) {
     int8_t rslt = BMP3_SENSOR_OK;
 
